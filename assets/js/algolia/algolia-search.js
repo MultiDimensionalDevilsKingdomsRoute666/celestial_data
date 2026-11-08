@@ -5,12 +5,13 @@ const algoliaClient = algoliasearch(
 
 const searchClient = {
   search(requests) {
-    if (requests.every(({ params }) => !params.query)) {
+    if (requests.every(({ params }) => (params.query || '').trim().length < 2)) {
       return Promise.resolve({
-        results: requests.map(() => ({
+        results: requests.map(({ params }) => ({
           hits: [],
           nbHits: 0,
           nbPages: 0,
+          query: params.query || '',
         })),
       });
     }
@@ -41,7 +42,7 @@ function parsecontent(hit) {
   if (hit.html === undefined){
     return " "
   } else {
-    return hit._highlightResult.html.value
+    return hit._highlightResult?.html?.value ?? hit.html ?? '';
   }
 }
 function parsetitle(hit) {
@@ -60,8 +61,14 @@ if (img1 === undefined){
   }
 }
 
+function resultUrl(path) {
+  if (/^(?:https?:)?\/\//i.test(path)) return path;
+  const base = "https://dieghernan.github.io/celestial_data/";
+  return base.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
+}
+
 const hitTemplate = function(hit) {
-  const url = hit.url;
+  const url = resultUrl(hit.url);
   const title = parsetitle(hit);
   const content = parsecontent(hit);
   const img = parseimg(hit.og_image, hit.header_img);
@@ -71,12 +78,12 @@ const hitTemplate = function(hit) {
           <article class="my-2 text-left">
           <div class="row">
           <div class="col">
-          <h5 class="chulapa-links-hover-only"><a href="https://dieghernan.github.io/celestial_data${url}">${title}</a></h5>
+          <h5 class="chulapa-links-hover-only"><a href="${url}">${title}</a></h5>
           </div>
           </div>
           <div class="row mt-2">
           <div class="col">
-          <p>${content}</p>
+          <div class="small text-muted border-left pl-3">${content}</div>
           </div>
           </div>
           <hr>
@@ -87,17 +94,17 @@ const hitTemplate = function(hit) {
     <article class="my-2 text-left">
       <div class="row">
         <div class="col">
-          <h5 class="chulapa-links-hover-only"><a href="https://dieghernan.github.io/celestial_data${url}">${title}</a></h5>
+          <h5 class="chulapa-links-hover-only"><a href="${url}">${title}</a></h5>
         </div>
       <div class="col-4 col-md-3">
-      <a href="https://dieghernan.github.io/celestial_data${url}">
+      <a href="${url}">
         <div class="rounded-lg chulapa-overlay-img chulapa-gradient chulapa-min-h-10" style="background-image: url('${imglink}')" ></div>
         </a>
         </div>
     </div>
     <div class="row mt-2">
     <div class="col">
-    <p>${content}</p>
+    <div class="small text-muted border-left pl-3">${content}</div>
     </div>
     </div>
     <hr>
@@ -122,16 +129,14 @@ search.addWidgets([
     },
   }),
   
-  
   instantsearch.widgets.hits({
     container: '#hits',
     escapeHTML: false,
     templates: {
-      empty: `
-        {{#query}}
-          <h6 class="text-center">No results found</h6>
-        {{/query}}
-      `,
+      empty(results) {
+        if ((results.query || '').trim().length < 2) return '';
+        return '<h6 class="text-center">No results found</h6>';
+      },
       item: hitTemplate
     },
   }),
